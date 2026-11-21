@@ -1,0 +1,54 @@
+
+[01] setup     all          Each party generates an ML-KEM-768 View key pair
+       public key size        1184 bytes
+       private key size       64 bytes (seed)
+       => 4 key pairs
+
+[02] layer 2   Bank A ↔ B   One-time ML-KEM key agreement; only the ciphertext is public
+       ciphertext on Hub      6c6d8a6740ec…e34c73d1 (1088 bytes)
+       shared secret          7360df78f35b…75a80b02
+       => both banks hold the same 32-byte secret: true
+
+[03] layer 2   Bank A       Encrypts a payment to Bank B (AES-256-GCM, key = HKDF-SHA3(secret, "Rayls"))
+       plaintext              {"from":"BankA:0xA11CE","to":"BankB:0xB0B","asset":"tokenized BRL deposit","amount":"250000.00"}
+       message tag            92879390ab31263a4ac83ce94be7dd06
+       stored on Hub          92879390ab31…a88799e0 (140 bytes)
+       => what the Hub stores: tag + ciphertext only
+
+[04] layer 2   Bank B       Recomputes the tag with its secret, matches it, decrypts
+       tag match              true
+       decrypt error          <nil>
+       => reads: {"from":"BankA:0xA11CE","to":"BankB:0xB0B","asset":"tokenized BRL deposit","amount":"250000.00"}
+
+[05] layer 2   Bank C       A bank not in the payment tries with its own secret
+       tag match              false
+       decrypt                message authentication failed
+       => cannot read it
+
+[06] layer 2   observer     Same banks, same payment, next block
+       tag at block 42        92879390ab31263a4ac83ce94be7dd06
+       tag at block 43        a9bffa7187137b594b804e03e165450d
+       => tags don't repeat, so an outsider can't link messages
+
+[07] layer 4   Banks A, B   Each bank encrypts its View private key to the operator (AuditInfo)
+       Bank A AuditInfo       000000000000…9c7238fd (134 bytes)
+       Bank A MAC (SHA3)      1b349457f6a2…e697d049
+       Bank B AuditInfo       000000000000…fc410bfc (134 bytes)
+       => stored on the Hub, readable only with the operator's key
+
+[08] layer 4   Operator     processAuditEntry: opens each AuditInfo with the operator key
+       Bank A key matches     true
+       Bank B key matches     true
+       => recovered keys match the banks' own
+
+[09] layer 4   Operator     processPairSecret: rebuilds the A↔B secret, decrypts the payment for audit
+       pair secret matches    true
+       decrypt error          <nil>
+       => reads: {"from":"BankA:0xA11CE","to":"BankB:0xB0B","asset":"tokenized BRL deposit","amount":"250000.00"}
+
+[10] layer 4   Bank A       Rotates its View key; UpdateRaylsViewKeys escrows the new one too
+       new key differs        true
+       operator recovers new key true
+       => audit view continues after rotation
+
+wrote walkthrough.json

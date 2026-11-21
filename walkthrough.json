@@ -1,0 +1,114 @@
+[
+  {
+    "n": 1,
+    "layer": "setup",
+    "who": "all",
+    "what": "Each party generates an ML-KEM-768 View key pair",
+    "values": {
+      "private key size": "64 bytes (seed)",
+      "public key size": "1184 bytes"
+    },
+    "result": "4 key pairs"
+  },
+  {
+    "n": 2,
+    "layer": "layer 2",
+    "who": "Bank A ↔ B",
+    "what": "One-time ML-KEM key agreement; only the ciphertext is public",
+    "values": {
+      "ciphertext on Hub": "6c6d8a6740ec…e34c73d1 (1088 bytes)",
+      "shared secret": "7360df78f35b…75a80b02"
+    },
+    "result": "both banks hold the same 32-byte secret: true"
+  },
+  {
+    "n": 3,
+    "layer": "layer 2",
+    "who": "Bank A",
+    "what": "Encrypts a payment to Bank B (AES-256-GCM, key = HKDF-SHA3(secret, \"Rayls\"))",
+    "values": {
+      "message tag": "92879390ab31263a4ac83ce94be7dd06",
+      "plaintext": "{\"from\":\"BankA:0xA11CE\",\"to\":\"BankB:0xB0B\",\"asset\":\"tokenized BRL deposit\",\"amount\":\"250000.00\"}",
+      "stored on Hub": "92879390ab31…a88799e0 (140 bytes)"
+    },
+    "result": "what the Hub stores: tag + ciphertext only"
+  },
+  {
+    "n": 4,
+    "layer": "layer 2",
+    "who": "Bank B",
+    "what": "Recomputes the tag with its secret, matches it, decrypts",
+    "values": {
+      "decrypt error": "\u003cnil\u003e",
+      "tag match": "true"
+    },
+    "result": "reads: {\"from\":\"BankA:0xA11CE\",\"to\":\"BankB:0xB0B\",\"asset\":\"tokenized BRL deposit\",\"amount\":\"250000.00\"}"
+  },
+  {
+    "n": 5,
+    "layer": "layer 2",
+    "who": "Bank C",
+    "what": "A bank not in the payment tries with its own secret",
+    "values": {
+      "decrypt": "message authentication failed",
+      "tag match": "false"
+    },
+    "result": "cannot read it"
+  },
+  {
+    "n": 6,
+    "layer": "layer 2",
+    "who": "observer",
+    "what": "Same banks, same payment, next block",
+    "values": {
+      "tag at block 42": "92879390ab31263a4ac83ce94be7dd06",
+      "tag at block 43": "a9bffa7187137b594b804e03e165450d"
+    },
+    "result": "tags don't repeat, so an outsider can't link messages"
+  },
+  {
+    "n": 7,
+    "layer": "layer 4",
+    "who": "Banks A, B",
+    "what": "Each bank encrypts its View private key to the operator (AuditInfo)",
+    "values": {
+      "Bank A AuditInfo": "000000000000…9c7238fd (134 bytes)",
+      "Bank A MAC (SHA3)": "1b349457f6a2…e697d049",
+      "Bank B AuditInfo": "000000000000…fc410bfc (134 bytes)"
+    },
+    "result": "stored on the Hub, readable only with the operator's key"
+  },
+  {
+    "n": 8,
+    "layer": "layer 4",
+    "who": "Operator",
+    "what": "processAuditEntry: opens each AuditInfo with the operator key",
+    "values": {
+      "Bank A key matches": "true",
+      "Bank B key matches": "true"
+    },
+    "result": "recovered keys match the banks' own"
+  },
+  {
+    "n": 9,
+    "layer": "layer 4",
+    "who": "Operator",
+    "what": "processPairSecret: rebuilds the A↔B secret, decrypts the payment for audit",
+    "values": {
+      "decrypt error": "\u003cnil\u003e",
+      "pair secret matches": "true"
+    },
+    "result": "reads: {\"from\":\"BankA:0xA11CE\",\"to\":\"BankB:0xB0B\",\"asset\":\"tokenized BRL deposit\",\"amount\":\"250000.00\"}"
+  },
+  {
+    "n": 10,
+    "layer": "layer 4",
+    "who": "Bank A",
+    "what": "Rotates its View key; UpdateRaylsViewKeys escrows the new one too",
+    "values": {
+      "new key differs": "true",
+      "operator recovers new key": "true"
+    },
+    "result": "audit view continues after rotation"
+  }
+]
